@@ -36,4 +36,11 @@ func startTask(tasks map[string]time.Duration) {
     fmt.Print("Enter task name: ")
     fmt.Scan(&taskName)
 
-    
+    fmt.Println("Task started. Press Enter to stop.")
+    start := time.Now()
+    fmt.Scanln() // Wait for Enter key
+    duration := time.Since(start)
+
+    tasks[taskName] = duration
+    fmt.Printf("Task '%s' completed in %v\n", taskName, duration.Round(time.Second))
+}
