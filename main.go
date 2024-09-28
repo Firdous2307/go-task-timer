@@ -30,11 +30,11 @@ func main() {
         case 1:
             startTask(tasks)
 
-        // case 2:
-        //     viewTasks(tasks)
-        // case 3:
-        //     fmt.Println("Goodbye! :)")
-        //     return
+        case 2:
+            viewTasks(tasks)
+        case 3:
+            fmt.Println("Goodbye! :)")
+            return
         default:
             fmt.Println("Invalid choice. Please try again.")
         }
@@ -62,4 +62,17 @@ func startTask(tasks map[string]time.Duration) {
 
     tasks[taskName] = duration
     fmt.Printf("Task '%s' completed in %v\n", taskName, duration.Round(time.Second))
+}
+
+
+func viewTasks(tasks map[string]time.Duration) {
+    if len(tasks) == 0 {
+        fmt.Println("No tasks available.")
+        return
+    }
+
+    fmt.Println(" Completed Tasks:")
+    for name, duration := range tasks {
+        fmt.Printf("- %s: %v\n", name, duration.Round(time.Second))
+    }
 }
