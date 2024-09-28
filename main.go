@@ -14,4 +14,19 @@ func main() {
         fmt.Println("3. Exit")
         fmt.Print("Choose an option: ")
 
-     
+        var choice int
+        fmt.Scan(&choice)
+
+        switch choice {
+        case 1:
+            startTask(tasks)
+        case 2:
+            viewTasks(tasks)
+        case 3:
+            fmt.Println("Goodbye :) !")
+            return
+        default:
+            fmt.Println("Invalid choice. Please try again.")
+        }
+    }
+}
