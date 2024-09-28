@@ -2,12 +2,12 @@ package main
 
 import (
     "fmt"
-	"bytes"
     "html/template"
     "sync"
     "time"
 
     "github.com/gofiber/fiber/v2"
+    "github.com/gofiber/fiber/v2/middleware/logger"
     "github.com/Firdous2307/go-task-timer/TaskTimer"
 )
 
@@ -24,9 +24,17 @@ var (
 func main() {
     app := fiber.New()
 
+    // Middleware for logging requests
+    app.Use(logger.New())
+
+    // Serve static files
+    app.Static("/static", "./static")
+
+
     // Web server routes
     app.Get("/", homeHandler)
     app.Post("/start", startTaskHandler)
+    app.Post("/stop", stopTaskHandler)
 
     // Run web server in a goroutine to allow CLI usage alongside
     go func() {
@@ -37,37 +45,50 @@ func main() {
     cliLoop()
 }
 
+
 func homeHandler(c *fiber.Ctx) error {
     mu.Lock()
     defer mu.Unlock()
 
-    tmpl, err := template.ParseFiles("templates/index.html")
-    if err != nil {
-        return c.Status(500).SendString("Error loading template: " + err.Error())
-    }
-
-    var renderedHTML bytes.Buffer
-    if err := tmpl.Execute(&renderedHTML, struct{ Tasks []Task }{Tasks: tasks}); err != nil {
-        return c.Status(500).SendString("Error rendering template: " + err.Error())
-    }
-
-    return c.Type("html").SendString(renderedHTML.String())
+    tmpl := template.Must(template.ParseFiles("templates/index.html"))
+    return tmpl.Execute(c, struct{ Tasks []Task }{Tasks: tasks})
 }
-
 
 func startTaskHandler(c *fiber.Ctx) error {
     taskName := c.FormValue("task")
+    if taskName == "" {
+        return c.Status(400).SendString("Task name is required.")
+    }
 
     mu.Lock()
-    start := time.Now()
+    tasks = append(tasks, Task{Name: taskName, Duration: 0}) // Start task without duration
     mu.Unlock()
+
+    return c.SendString("Task started")
+}
+
+func stopTaskHandler(c *fiber.Ctx) error {
+    taskName := c.FormValue("task")
+    durationStr := c.FormValue("duration")
+    if taskName == "" || durationStr == "" {
+        return c.Status(400).SendString("Task name and duration are required.")
+    }
+
+    duration, err := time.ParseDuration(durationStr + "s") // Convert duration to time.Duration
+    if err != nil {
+        return c.Status(400).SendString("Invalid duration.")
+    }
 
     mu.Lock()
-    duration := time.Since(start)
-    tasks = append(tasks, Task{Name: taskName, Duration: duration})
+    for i, task := range tasks {
+        if task.Name == taskName && task.Duration == 0 {
+            tasks[i].Duration = duration // Update the duration for the task
+            break
+        }
+    }
     mu.Unlock()
 
-    return c.Redirect("/")
+    return c.SendString("Task stopped")
 }
 
 func cliLoop() {

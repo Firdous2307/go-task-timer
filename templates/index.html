@@ -4,79 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Timer</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
-        }
-        h1 {
-            color: #333;
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        input[type="text"] {
-            padding: 10px;
-            font-size: 16px;
-            margin-right: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #218838;
-        }
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        li {
-            background-color: #fff;
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <h1>Task Timer</h1>
-    <form id="taskForm" action="/start" method="POST" onsubmit="return validateForm()">
+    <form id="taskForm">
         <label for="task">Enter Task Name:</label>
         <input type="text" id="task" name="task" required>
-        <button type="submit">Start Task</button>
+        <button type="button" onclick="startTask()">Start Task</button>
+        <button type="button" onclick="stopTask()">Stop Task</button>
     </form>
 
     <h2>Completed Tasks</h2>
-    <ul id="taskList">
-        {{range .Tasks}}
-            <li>{{.Name}} - {{.Duration}}</li>
-        {{else}}
-            <li>No tasks completed yet.</li>
-        {{end}}
-    </ul>
+    <ul id="taskList"></ul>
 
-    <script>
-        function validateForm() {
-            var taskName = document.getElementById('task').value;
-            if (taskName === "") {
-                alert("Task name cannot be empty!");
-                return false;
-            }
-            return true;
-        }
-    </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>
