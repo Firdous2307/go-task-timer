@@ -2,13 +2,76 @@ package main
 
 import (
     "fmt"
+	"bytes"
+    "html/template"
+    "sync"
     "time"
 
+    "github.com/gofiber/fiber/v2"
     "github.com/Firdous2307/go-task-timer/TaskTimer"
 )
 
+type Task struct {
+    Name     string
+    Duration time.Duration
+}
+
+var (
+    tasks []Task
+    mu    sync.Mutex
+)
+
 func main() {
-    tasks := make(map[string]time.Duration)
+    app := fiber.New()
+
+    // Web server routes
+    app.Get("/", homeHandler)
+    app.Post("/start", startTaskHandler)
+
+    // Run web server in a goroutine to allow CLI usage alongside
+    go func() {
+        app.Listen(":8080")
+    }()
+
+    // CLI loop for user input
+    cliLoop()
+}
+
+func homeHandler(c *fiber.Ctx) error {
+    mu.Lock()
+    defer mu.Unlock()
+
+    tmpl, err := template.ParseFiles("templates/index.html")
+    if err != nil {
+        return c.Status(500).SendString("Error loading template: " + err.Error())
+    }
+
+    var renderedHTML bytes.Buffer
+    if err := tmpl.Execute(&renderedHTML, struct{ Tasks []Task }{Tasks: tasks}); err != nil {
+        return c.Status(500).SendString("Error rendering template: " + err.Error())
+    }
+
+    return c.Type("html").SendString(renderedHTML.String())
+}
+
+
+func startTaskHandler(c *fiber.Ctx) error {
+    taskName := c.FormValue("task")
+
+    mu.Lock()
+    start := time.Now()
+    mu.Unlock()
+
+    mu.Lock()
+    duration := time.Since(start)
+    tasks = append(tasks, Task{Name: taskName, Duration: duration})
+    mu.Unlock()
+
+    return c.Redirect("/")
+}
+
+func cliLoop() {
+    cliTasks := make(map[string]time.Duration)
 
     for {
         fmt.Println("\n1. Start a task")
@@ -20,7 +83,6 @@ func main() {
         _, err := fmt.Scan(&choice)
         if err != nil {
             fmt.Println("Invalid choice. Please try again.")
-            // Clear the input buffer if there's an error
             var discard string
             fmt.Scanln(&discard)
             continue
@@ -28,12 +90,11 @@ func main() {
 
         switch choice {
         case 1:
-            TaskTimer.StartTask(tasks)
-
+            TaskTimer.StartTask(cliTasks)
         case 2:
-            TaskTimer.ViewTasks(tasks)
+            TaskTimer.ViewTasks(cliTasks)
         case 3:
-            fmt.Println("Goodbye! :)")
+            fmt.Println("Goodbye!")
             return
         default:
             fmt.Println("Invalid choice. Please try again.")
