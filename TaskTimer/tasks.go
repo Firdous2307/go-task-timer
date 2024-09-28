@@ -1,4 +1,4 @@
-package taskTimer
+package TaskTimer
 
 import (
     "bufio"
@@ -14,7 +14,7 @@ func StartTask(tasks map[string]time.Duration) {
     // Use bufio to read the full line for task name
     reader := bufio.NewReader(os.Stdin)
     taskName, _ = reader.ReadString('\n')
-    taskName = taskName[:len(taskName)-1] 
+    taskName = taskName[:len(taskName)-1]
 
     if taskName == "" {
         fmt.Println("Task name cannot be empty. Please try again.")

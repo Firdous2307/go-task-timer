@@ -28,10 +28,10 @@ func main() {
 
         switch choice {
         case 1:
-            taskTimer.StartTask(tasks)
+            TaskTimer.StartTask(tasks)
 
         case 2:
-            taskTimer.ViewTasks(tasks)
+            TaskTimer.ViewTasks(tasks)
         case 3:
             fmt.Println("Goodbye! :)")
             return
