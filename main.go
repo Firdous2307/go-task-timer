@@ -30,3 +30,10 @@ func main() {
         }
     }
 }
+
+func startTask(tasks map[string]time.Duration) {
+    var taskName string
+    fmt.Print("Enter task name: ")
+    fmt.Scan(&taskName)
+
+    
