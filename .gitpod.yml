@@ -1,0 +1,11 @@
+tasks:
+  - name: Go Project Setup
+    before: |
+      go mod tidy
+      go get -u github.com/gofiber/fiber/v2
+      go get -u html/template
+      go run main.go
+vscode:
+  extensions:
+    - golang.go
+
