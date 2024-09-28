@@ -6,8 +6,8 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/main' # This condition prevents the job from running on main
 
     steps:
     - name: Checkout code

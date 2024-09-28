@@ -1,14 +1,15 @@
 package main
 
 import (
+    "log"
     "fmt"
-    "html/template"
     "sync"
     "time"
 
     "github.com/gofiber/fiber/v2"
     "github.com/gofiber/fiber/v2/middleware/logger"
-    "github.com/Firdous2307/go-task-timer/TaskTimer"
+    "github.com/gofiber/template/html/v2"
+
 )
 
 type Task struct {
@@ -22,79 +23,36 @@ var (
 )
 
 func main() {
-    app := fiber.New()
+    engine := html.New("./templates", ".html")
 
-    // Middleware for logging requests
+    engine.Reload(true) // Reload templates on each render
+    engine.Debug(true)  // Print parsed templates for debugging
+
+    app := fiber.New(fiber.Config{
+        Views: engine,
+    })
+
     app.Use(logger.New())
-
-    // Serve static files
     app.Static("/static", "./static")
 
-
-    // Web server routes
     app.Get("/", homeHandler)
     app.Post("/start", startTaskHandler)
     app.Post("/stop", stopTaskHandler)
 
-    // Run web server in a goroutine to allow CLI usage alongside
+    // Start the Fiber app in a separate goroutine
     go func() {
-        app.Listen(":8080")
+        log.Fatal(app.Listen(":8080"))
     }()
 
-    // CLI loop for user input
-    cliLoop()
+    cliLoop() // Start the CLI loop
 }
 
-
-func homeHandler(c *fiber.Ctx) error {
-    mu.Lock()
-    defer mu.Unlock()
-
-    tmpl := template.Must(template.ParseFiles("templates/index.html"))
-    return tmpl.Execute(c, struct{ Tasks []Task }{Tasks: tasks})
-}
-
-func startTaskHandler(c *fiber.Ctx) error {
-    taskName := c.FormValue("task")
-    if taskName == "" {
-        return c.Status(400).SendString("Task name is required.")
-    }
-
-    mu.Lock()
-    tasks = append(tasks, Task{Name: taskName, Duration: 0}) // Start task without duration
-    mu.Unlock()
-
-    return c.SendString("Task started")
-}
-
-func stopTaskHandler(c *fiber.Ctx) error {
-    taskName := c.FormValue("task")
-    durationStr := c.FormValue("duration")
-    if taskName == "" || durationStr == "" {
-        return c.Status(400).SendString("Task name and duration are required.")
-    }
-
-    duration, err := time.ParseDuration(durationStr + "s") // Convert duration to time.Duration
-    if err != nil {
-        return c.Status(400).SendString("Invalid duration.")
-    }
-
-    mu.Lock()
-    for i, task := range tasks {
-        if task.Name == taskName && task.Duration == 0 {
-            tasks[i].Duration = duration // Update the duration for the task
-            break
-        }
-    }
-    mu.Unlock()
-
-    return c.SendString("Task stopped")
-}
-
+// CLI Loop for user interaction
 func cliLoop() {
     cliTasks := make(map[string]time.Duration)
 
     for {
+        // Display options to the user
         fmt.Println("\n1. Start a task")
         fmt.Println("2. View tasks")
         fmt.Println("3. Exit")
@@ -111,9 +69,9 @@ func cliLoop() {
 
         switch choice {
         case 1:
-            TaskTimer.StartTask(cliTasks)
+            startTask(cliTasks)
         case 2:
-            TaskTimer.ViewTasks(cliTasks)
+            viewTasks(cliTasks)
         case 3:
             fmt.Println("Goodbye!")
             return
@@ -121,4 +79,65 @@ func cliLoop() {
             fmt.Println("Invalid choice. Please try again.")
         }
     }
+}
+
+func startTask(cliTasks map[string]time.Duration) {
+    var taskName string
+    fmt.Print("Enter task name: ")
+    fmt.Scan(&taskName)
+
+    // Example of starting a task
+    cliTasks[taskName] = 0 // Initialize task duration
+    fmt.Println("Task started:", taskName)
+}
+
+func viewTasks(cliTasks map[string]time.Duration) {
+    fmt.Println("Current tasks:")
+    for name, duration := range cliTasks {
+        fmt.Printf("Task: %s, Duration: %v\n", name, duration)
+    }
+}
+
+func homeHandler(c *fiber.Ctx) error {
+    mu.Lock()
+    defer mu.Unlock()
+
+    return c.Render("index", fiber.Map{"Tasks": tasks})
+}
+
+func startTaskHandler(c *fiber.Ctx) error {
+    taskName := c.FormValue("task")
+    if taskName == "" {
+        return c.Status(400).SendString("Task name is required.")
+    }
+
+    mu.Lock()
+    tasks = append(tasks, Task{Name: taskName, Duration: 0})
+    mu.Unlock()
+
+    return c.SendString("Task started")
+}
+
+func stopTaskHandler(c *fiber.Ctx) error {
+    taskName := c.FormValue("task")
+    durationStr := c.FormValue("duration")
+    if taskName == "" || durationStr == "" {
+        return c.Status(400).SendString("Task name and duration are required.")
+    }
+
+    duration, err := time.ParseDuration(durationStr + "s")
+    if err != nil {
+        return c.Status(400).SendString("Invalid duration.")
+    }
+
+    mu.Lock()
+    for i, task := range tasks {
+        if task.Name == taskName && task.Duration == 0 {
+            tasks[i].Duration = duration
+            break
+        }
+    }
+    mu.Unlock()
+
+    return c.SendString("Task stopped")
 }
