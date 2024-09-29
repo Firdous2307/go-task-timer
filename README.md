@@ -1,4 +1,4 @@
-# Go-task-timer
+# Go-Task-Timer
 
 This is a simple web-based task timer application written in Go. It allows users to track the duration of tasks, offering an intuitive web interface to start a task, stop it, and view the task's duration.
 
