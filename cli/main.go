@@ -23,8 +23,8 @@ var (
 )
 
 func main() {
-    engine := html.New("./templates", ".html")
-
+    // Updated paths in main.go
+    engine := html.New("../web/templates", ".html") // Template path relative to cli foldr
     engine.Reload(true) // Reload templates on each render
     engine.Debug(true)  // Print parsed templates for debugging
 
@@ -33,7 +33,7 @@ func main() {
     })
 
     app.Use(logger.New())
-    app.Static("/static", "./static")
+    app.Static("/static", "../web/static")          // Static path relative to cli folder
 
     app.Get("/", homeHandler)
     app.Post("/start", startTaskHandler)
