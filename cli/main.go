@@ -48,7 +48,7 @@ func main() {
 
 // CLI Loop for user interaction
 func cliLoop() {
-	cliTasks := make(map[string]time.Duration)
+	cliTasks := make(map[string]time.Time)
 
 	for {
 		// Display options to the user
@@ -61,13 +61,8 @@ func cliLoop() {
 		_, err := fmt.Scan(&choice)
 		if err != nil {
 			fmt.Println("Invalid choice. Please try again.")
-			var discard string
-			_, err := fmt.Scanln(&discard)
-			if err != nil {
-				fmt.Println("Error reading input:", err)
-				// Decide whether to continue or return based on the error
-				continue
-			}
+			continue
+
 		}
 
 		switch choice {
@@ -84,23 +79,50 @@ func cliLoop() {
 	}
 }
 
-func startTask(cliTasks map[string]time.Duration) {
+func startTask(cliTasks map[string]time.Time) {
 	var taskName string
 	fmt.Print("Enter task name: ")
-	_, err := fmt.Scan(&taskName)
-	if err != nil {
-		fmt.Println("Error reading task name:", err)
+	fmt.Scan(&taskName)
+	if taskName == "" {
+		fmt.Println("Task name cannot be empty.")
 		return
 	}
-	// Example of starting a task
-	cliTasks[taskName] = 0 // Initialize task duration
+
+	if _, exists := cliTasks[taskName]; exists {
+		fmt.Println("Task already exists and is running.")
+		return
+	}
+
+	cliTasks[taskName] = time.Now()
 	fmt.Println("Task started:", taskName)
 }
 
-func viewTasks(cliTasks map[string]time.Duration) {
-	fmt.Println("Current tasks:")
-	for name, duration := range cliTasks {
-		fmt.Printf("Task: %s, Duration: %v\n", name, duration)
+func stopTask(cliTasks map[string]time.Time) {
+	var taskName string
+	fmt.Print("Enter task name to stop: ")
+	fmt.Scanln(&taskName)
+
+	startTime, exists := cliTasks[taskName]
+	if !exists {
+		fmt.Println("Task not found or already stopped.")
+		return
+	}
+
+	duration := time.Since(startTime)
+	delete(cliTasks, taskName)
+	fmt.Printf("Task '%s' stopped. Duration: %v\n", taskName, duration.Round(time.Second))
+}
+
+func viewTasks(cliTasks map[string]time.Time) {
+	if len(cliTasks) == 0 {
+		fmt.Println("No active tasks.")
+		return
+	}
+
+	fmt.Println("Active tasks:")
+	for name, startTime := range cliTasks {
+		duration := time.Since(startTime)
+		fmt.Printf("- %s (running for %v)\n", name, duration.Round(time.Second))
 	}
 }
 
@@ -126,24 +148,19 @@ func startTaskHandler(c *fiber.Ctx) error {
 
 func stopTaskHandler(c *fiber.Ctx) error {
 	taskName := c.FormValue("task")
-	durationStr := c.FormValue("duration")
-	if taskName == "" || durationStr == "" {
-		return c.Status(400).SendString("Task name and duration are required.")
-	}
-
-	duration, err := time.ParseDuration(durationStr + "s")
-	if err != nil {
-		return c.Status(400).SendString("Invalid duration.")
+	if taskName == "" {
+		return c.Status(400).SendString("Task name is required.")
 	}
 
 	mu.Lock()
+	defer mu.Unlock()
+
 	for i, task := range tasks {
 		if task.Name == taskName && task.Duration == 0 {
-			tasks[i].Duration = duration
-			break
+			tasks[i].Duration = time.Since(time.Now()) // Calculate duration
+			return c.SendString("Task stopped")
 		}
 	}
-	mu.Unlock()
 
-	return c.SendString("Task stopped")
+	return c.Status(400).SendString("Task not found or already stopped.")
 }
