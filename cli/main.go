@@ -62,12 +62,12 @@ func cliLoop() {
 		if err != nil {
 			fmt.Println("Invalid choice. Please try again.")
 			var discard string
-			fmt.Scanln(&discard)
+			_, err := fmt.Scanln(&discard)
 			if err != nil {
 				fmt.Println("Error reading input:", err)
 				// Decide whether to continue or return based on the error
+				continue
 			}
-			continue
 		}
 
 		switch choice {
@@ -92,8 +92,6 @@ func startTask(cliTasks map[string]time.Duration) {
 		fmt.Println("Error reading task name:", err)
 		return
 	}
-	fmt.Scan(&taskName)
-
 	// Example of starting a task
 	cliTasks[taskName] = 0 // Initialize task duration
 	fmt.Println("Task started:", taskName)
