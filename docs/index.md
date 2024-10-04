@@ -8,7 +8,7 @@
 5. [Project Structure](project-structure.md)
 6. [Technologies Used](technologies.md)
 7. [Testing](testing.md)
-8. [Continuous Integration](ci.md)
+8. [Continuous Integration and Continious Deployment](ci-cd.md)
 9. [Contributing](contributing.md)
 
 ## Introduction
