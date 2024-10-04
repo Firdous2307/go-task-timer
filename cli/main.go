@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,9 +19,15 @@ type Task struct {
 	Duration time.Duration
 }
 
+type CompletedTask struct {
+	Name     string        `json:"Name"`
+	Duration time.Duration `json:"Duration"`
+}
+
 var (
-	tasks []Task
-	mu    sync.Mutex
+	tasks          []Task
+	mu             sync.Mutex
+	completedTasks []CompletedTask
 )
 
 func main() {
@@ -37,6 +46,7 @@ func main() {
 	app.Get("/", homeHandler)
 	app.Post("/start", startTaskHandler)
 	app.Post("/stop", stopTaskHandler)
+	app.Get("/completed-tasks", completedTasksHandler)
 
 	// Start the Fiber app in a separate goroutine
 	go func() {
@@ -49,28 +59,27 @@ func main() {
 // CLI Loop for user interaction
 func cliLoop() {
 	cliTasks := make(map[string]time.Time)
+	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
-		// Display options to the user
 		fmt.Println("\n1. Start a task")
 		fmt.Println("2. View tasks")
 		fmt.Println("3. Exit")
 		fmt.Print("Choose an option: ")
 
-		var choice int
-		_, err := fmt.Scan(&choice)
-		if err != nil {
-			fmt.Println("Invalid choice. Please try again.")
+		if !scanner.Scan() {
+			fmt.Println("Error reading input")
 			continue
-
 		}
 
+		choice := strings.TrimSpace(scanner.Text())
+
 		switch choice {
-		case 1:
+		case "1":
 			startTask(cliTasks)
-		case 2:
+		case "2":
 			viewTasks(cliTasks)
-		case 3:
+		case "3":
 			fmt.Println("Goodbye!")
 			return
 		default:
@@ -81,10 +90,22 @@ func cliLoop() {
 
 func startTask(cliTasks map[string]time.Time) {
 	var taskName string
+	var duration int
+
 	fmt.Print("Enter task name: ")
-	fmt.Scan(&taskName)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		taskName = strings.TrimSpace(scanner.Text())
+	}
 	if taskName == "" {
 		fmt.Println("Task name cannot be empty.")
+		return
+	}
+
+	fmt.Print("Enter task duration in seconds (0 for no limit): ")
+	_, err := fmt.Scanf("%d\n", &duration)
+	if err != nil {
+		fmt.Println("Invalid duration. Please enter a number.")
 		return
 	}
 
@@ -95,6 +116,16 @@ func startTask(cliTasks map[string]time.Time) {
 
 	cliTasks[taskName] = time.Now()
 	fmt.Println("Task started:", taskName)
+
+	if duration > 0 {
+		go func() {
+			time.Sleep(time.Duration(duration) * time.Second)
+			if _, exists := cliTasks[taskName]; exists {
+				delete(cliTasks, taskName)
+				fmt.Printf("Task '%s' automatically stopped after %d seconds.\n", taskName, duration)
+			}
+		}()
+	}
 }
 
 func stopTask(cliTasks map[string]time.Time) {
@@ -111,6 +142,12 @@ func stopTask(cliTasks map[string]time.Time) {
 	duration := time.Since(startTime)
 	delete(cliTasks, taskName)
 	fmt.Printf("Task '%s' stopped. Duration: %v\n", taskName, duration.Round(time.Second))
+
+	// Add the completed task to the slice
+	completedTasks = append(completedTasks, CompletedTask{
+		Name:     taskName,
+		Duration: duration,
+	})
 }
 
 func viewTasks(cliTasks map[string]time.Time) {
@@ -135,32 +172,73 @@ func homeHandler(c *fiber.Ctx) error {
 
 func startTaskHandler(c *fiber.Ctx) error {
 	taskName := c.FormValue("task")
+	durationStr := c.FormValue("duration")
+
 	if taskName == "" {
 		return c.Status(400).SendString("Task name is required.")
 	}
 
+	duration, err := time.ParseDuration(durationStr + "s")
+	if err != nil {
+		return c.Status(400).SendString("Invalid duration format.")
+	}
+
 	mu.Lock()
-	tasks = append(tasks, Task{Name: taskName, Duration: 0})
+	tasks = append(tasks, Task{Name: taskName, Duration: duration})
 	mu.Unlock()
 
+	// Start a goroutine to handle task completion
+	go handleTaskCompletion(taskName, duration)
 	return c.SendString("Task started")
+}
+
+func handleTaskCompletion(taskName string, duration time.Duration) {
+	time.Sleep(duration)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i, task := range tasks {
+		if task.Name == taskName {
+			// Remove the task from the slice
+			tasks = append(tasks[:i], tasks[i+1:]...)
+			// Add the task to completedTasks
+			completedTasks = append(completedTasks, CompletedTask{Name: taskName, Duration: duration})
+			// Print the completed task
+			fmt.Printf("Task completed: %s (Duration: %v)\n", taskName, duration)
+			break
+		}
+	}
+}
+
+func completedTasksHandler(c *fiber.Ctx) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return c.JSON(completedTasks)
 }
 
 func stopTaskHandler(c *fiber.Ctx) error {
 	taskName := c.FormValue("task")
+	durationStr := c.FormValue("duration")
+
 	if taskName == "" {
 		return c.Status(400).SendString("Task name is required.")
+	}
+
+	duration, err := time.ParseDuration(durationStr + "s")
+	if err != nil {
+		return c.Status(400).SendString("Invalid duration format.")
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 
 	for i, task := range tasks {
-		if task.Name == taskName && task.Duration == 0 {
-			tasks[i].Duration = time.Since(time.Now()) // Calculate duration
+		if task.Name == taskName {
+			tasks[i].Duration = duration
 			return c.SendString("Task stopped")
 		}
 	}
 
-	return c.Status(400).SendString("Task not found or already stopped.")
+	return c.Status(400).SendString("Task not found.")
 }
