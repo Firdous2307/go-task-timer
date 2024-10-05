@@ -20,8 +20,8 @@ type Task struct {
 }
 
 type CompletedTask struct {
-	Name     string        `json:"Name"`
-	Duration time.Duration `json:"Duration"`
+	Name     string  `json:"Name"`
+	Duration float64 `json:"Duration"`
 }
 
 var (
@@ -146,7 +146,7 @@ func stopTask(cliTasks map[string]time.Time) {
 	// Add the completed task to the slice
 	completedTasks = append(completedTasks, CompletedTask{
 		Name:     taskName,
-		Duration: duration,
+		Duration: duration.Seconds(),
 	})
 }
 
@@ -203,7 +203,10 @@ func handleTaskCompletion(taskName string, duration time.Duration) {
 			// Remove the task from the slice
 			tasks = append(tasks[:i], tasks[i+1:]...)
 			// Add the task to completedTasks
-			completedTasks = append(completedTasks, CompletedTask{Name: taskName, Duration: duration})
+			completedTasks = append(completedTasks, CompletedTask{
+				Name:     taskName,
+				Duration: duration.Seconds(),
+			})
 			// Print the completed task
 			fmt.Printf("Task completed: %s (Duration: %v)\n", taskName, duration)
 			break
@@ -236,9 +239,11 @@ func stopTaskHandler(c *fiber.Ctx) error {
 	for i, task := range tasks {
 		if task.Name == taskName {
 			tasks[i].Duration = duration
-			return c.SendString("Task stopped")
+			completedTasks = append(completedTasks, CompletedTask{Name: taskName, Duration: duration.Seconds()})
+			tasks = append(tasks[:i], tasks[i+1:]...)
+			return c.SendString("Done")
 		}
 	}
 
-	return c.Status(400).SendString("Task not found.")
+	return c.SendString("Done")
 }

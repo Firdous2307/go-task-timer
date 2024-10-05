@@ -40,7 +40,11 @@ function stopTask(taskName, duration) {
     })
     .then(response => response.text())
     .then(data => {
-        alert(data);
+        if (data === "Done") {
+            alert("Task completed successfully!");
+        } else {
+            alert(data);
+        }
         fetchCompletedTasks();
     })
     .catch(error => console.error('Error:', error));
@@ -55,7 +59,8 @@ function fetchCompletedTasks() {
             taskList.innerHTML = ''; // Clear existing list
             tasks.forEach(task => {
                 const li = document.createElement('li');
-                li.textContent = `${task.Name} (Duration: ${task.Duration} seconds)`;
+                const durationInSeconds = Math.round(task.Duration / 1e9); // Convert nanoseconds to seconds
+                li.textContent = `${task.Name} (Duration: ${durationInSeconds} seconds)`;
                 taskList.appendChild(li);
             });
         })
