@@ -9,7 +9,7 @@ Go-Task-Timer offers a range of powerful features to help you manage your tasks 
 ## Task Management
 - Start and stop tasks with ease
 - View completed tasks along with their durations
-- In-memory task storage during runtime
+- Persistent task storage using SQLite
 
 ## Concurrent Operation
 Run both web and CLI interfaces simultaneously for maximum flexibility
