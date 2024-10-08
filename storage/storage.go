@@ -1,7 +1,9 @@
+/*
 package storage
 
 import (
 	"database/sql"
+	"log"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -35,27 +37,42 @@ func InitDB() (*sql.DB, error) {
 func CreateTask(db *sql.DB, name string) (int64, error) {
 	result, err := db.Exec("INSERT INTO tasks (name, start_time) VALUES (?, ?)", name, time.Now())
 	if err != nil {
+		log.Printf("Error creating task: %v", err)
 		return 0, err
 	}
-	return result.LastInsertId()
-}
-
-func GetActiveTask(db *sql.DB) (*Task, error) {
-	var task Task
-	err := db.QueryRow("SELECT id, name, start_time FROM tasks WHERE end_time IS NULL ORDER BY start_time DESC LIMIT 1").Scan(&task.ID, &task.Name, &task.StartTime)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &task, nil
+	id, _ := result.LastInsertId()
+	log.Printf("Task created: ID=%d, Name=%s", id, name)
+	return id, nil
 }
 
 func StopTask(db *sql.DB, id int64) error {
 	endTime := time.Now()
-	_, err := db.Exec("UPDATE tasks SET end_time = ?, duration = ? WHERE id = ?", endTime, int(endTime.Sub(time.Now()).Seconds()), id)
-	return err
+	var startTime time.Time
+	err := db.QueryRow("SELECT start_time FROM tasks WHERE id = ?", id).Scan(&startTime)
+	if err != nil {
+		log.Printf("Error retrieving start time: %v", err)
+		return err
+	}
+	duration := endTime.Sub(startTime)
+	_, err = db.Exec("UPDATE tasks SET end_time = ?, duration = ? WHERE id = ?",
+		endTime,
+		int(duration.Seconds()),
+		id)
+	if err != nil {
+		log.Printf("Error stopping task: %v", err)
+		return err
+	}
+	log.Printf("Task stopped: ID=%d, Duration=%v", id, duration)
+	return nil
+}
+
+func GetTask(db *sql.DB, id int64) (*Task, error) {
+	var task Task
+	err := db.QueryRow("SELECT id, name, start_time, end_time, duration FROM tasks WHERE id = ?", id).Scan(&task.ID, &task.Name, &task.StartTime, &task.EndTime, &task.Duration)
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
 }
 
 func GetCompletedTasks(db *sql.DB) ([]Task, error) {
@@ -68,11 +85,14 @@ func GetCompletedTasks(db *sql.DB) ([]Task, error) {
 	var tasks []Task
 	for rows.Next() {
 		var task Task
-		err := rows.Scan(&task.ID, &task.Name, &task.StartTime, &task.EndTime, &task.Duration)
+		var durationSeconds int64
+		err := rows.Scan(&task.ID, &task.Name, &task.StartTime, &task.EndTime, &durationSeconds)
 		if err != nil {
 			return nil, err
 		}
+		task.Duration = time.Duration(durationSeconds) * time.Second
 		tasks = append(tasks, task)
 	}
 	return tasks, nil
 }
+/*

@@ -1,52 +1,65 @@
+/*
 package main
 
 import (
 	"bufio"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Firdous2307/go-task-timer/storage"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/template/html/v2"
 )
 
 type Task struct {
-	Name     string
-	Duration time.Duration
+	ID        int64
+	Name      string
+	StartTime time.Time
+	EndTime   time.Time
+	Duration  time.Duration
 }
 
 type CompletedTask struct {
-	Name     string  `json:"Name"`
-	Duration float64 `json:"Duration"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	StartTime time.Time `json:"startTime"`
+	EndTime   time.Time `json:"endTime"`
+	Duration  float64   `json:"duration"`
 }
 
 var (
-	tasks          []Task
-	mu             sync.Mutex
-	completedTasks []CompletedTask
+	mu sync.Mutex
+	db *sql.DB
 )
 
 func main() {
-	// Updated paths in main.go
-	engine := html.New("../web/templates", ".html") // Template path relative to cli foldr
-	engine.Reload(true)                             // Reload templates on each render
-	engine.Debug(true)                              // Print parsed templates for debugging
+	var err error
+	db, err = storage.InitDB()
+	if err != nil {
+		log.Fatal("Error initializing database:", err)
+	}
+	defer db.Close()
 
 	app := fiber.New(fiber.Config{
-		Views: engine,
+		Views: nil,
 	})
 
 	app.Use(logger.New())
-	app.Static("/static", "../web/static") // Static path relative to cli folder
+	app.Static("/", "../task-tracker-frontend/build")
 
-	app.Get("/", homeHandler)
-	app.Post("/start", startTaskHandler)
-	app.Post("/stop", stopTaskHandler)
-	app.Get("/completed-tasks", completedTasksHandler)
+	app.Post("/api/start", startTaskHandler)
+	app.Post("/api/stop", stopTaskHandler)
+	app.Get("/api/completed-tasks", completedTasksHandler)
+
+	app.Get("/*", func(c *fiber.Ctx) error {
+		return c.SendFile("../task-tracker-frontend/build/index.html")
+	})
 
 	// Start the Fiber app in a separate goroutine
 	go func() {
@@ -56,15 +69,14 @@ func main() {
 	cliLoop() // Start the CLI loop
 }
 
-// CLI Loop for user interaction
 func cliLoop() {
-	cliTasks := make(map[string]time.Time)
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
 		fmt.Println("\n1. Start a task")
-		fmt.Println("2. View tasks")
-		fmt.Println("3. Exit")
+		fmt.Println("2. Stop a task")
+		fmt.Println("3. View completed tasks")
+		fmt.Println("4. Exit")
 		fmt.Print("Choose an option: ")
 
 		if !scanner.Scan() {
@@ -76,10 +88,12 @@ func cliLoop() {
 
 		switch choice {
 		case "1":
-			startTask(cliTasks)
+			startTask()
 		case "2":
-			viewTasks(cliTasks)
+			stopTask()
 		case "3":
+			viewCompletedTasks()
+		case "4":
 			fmt.Println("Goodbye!")
 			return
 		default:
@@ -88,162 +102,121 @@ func cliLoop() {
 	}
 }
 
-func startTask(cliTasks map[string]time.Time) {
-	var taskName string
-	var duration int
-
+func startTask() {
 	fmt.Print("Enter task name: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
-		taskName = strings.TrimSpace(scanner.Text())
-	}
-	if taskName == "" {
-		fmt.Println("Task name cannot be empty.")
-		return
-	}
+		taskName := strings.TrimSpace(scanner.Text())
+		if taskName == "" {
+			fmt.Println("Task name cannot be empty.")
+			return
+		}
 
-	fmt.Print("Enter task duration in seconds (0 for no limit): ")
-	_, err := fmt.Scanf("%d\n", &duration)
+		id, err := storage.CreateTask(db, taskName)
+		if err != nil {
+			fmt.Println("Error starting task:", err)
+			return
+		}
+
+		fmt.Printf("Task started: %s (ID: %d)\n", taskName, id)
+		log.Printf("Task started via CLI: ID=%d, Name=%s", id, taskName)
+	}
+}
+
+func stopTask() {
+	fmt.Print("Enter task ID to stop: ")
+	var taskID int64
+	fmt.Scanln(&taskID)
+
+	err := storage.StopTask(db, taskID)
 	if err != nil {
-		fmt.Println("Invalid duration. Please enter a number.")
+		fmt.Println("Error stopping task:", err)
 		return
 	}
 
-	if _, exists := cliTasks[taskName]; exists {
-		fmt.Println("Task already exists and is running.")
+	// Retrieve the specific task that was stopped
+	task, err := storage.GetTask(db, taskID)
+	if err != nil {
+		fmt.Println("Error retrieving task details:", err)
 		return
 	}
 
-	cliTasks[taskName] = time.Now()
-	fmt.Println("Task started:", taskName)
-
-	if duration > 0 {
-		go func() {
-			time.Sleep(time.Duration(duration) * time.Second)
-			if _, exists := cliTasks[taskName]; exists {
-				delete(cliTasks, taskName)
-				fmt.Printf("Task '%s' automatically stopped after %d seconds.\n", taskName, duration)
-			}
-		}()
-	}
+	duration := task.EndTime.Sub(task.StartTime)
+	fmt.Printf("Task with ID %d stopped. Duration: %v\n", taskID, duration)
+	log.Printf("Task stopped via CLI: ID=%d, Duration=%v", taskID, duration)
 }
 
-func stopTask(cliTasks map[string]time.Time) {
-	var taskName string
-	fmt.Print("Enter task name to stop: ")
-	fmt.Scanln(&taskName)
-
-	startTime, exists := cliTasks[taskName]
-	if !exists {
-		fmt.Println("Task not found or already stopped.")
+func viewCompletedTasks() {
+	tasks, err := storage.GetCompletedTasks(db)
+	if err != nil {
+		fmt.Println("Error retrieving tasks:", err)
 		return
 	}
 
-	duration := time.Since(startTime)
-	delete(cliTasks, taskName)
-	fmt.Printf("Task '%s' stopped. Duration: %v\n", taskName, duration.Round(time.Second))
-
-	// Add the completed task to the slice
-	completedTasks = append(completedTasks, CompletedTask{
-		Name:     taskName,
-		Duration: duration.Seconds(),
-	})
-}
-
-func viewTasks(cliTasks map[string]time.Time) {
-	if len(cliTasks) == 0 {
-		fmt.Println("No active tasks.")
+	if len(tasks) == 0 {
+		fmt.Println("No completed tasks.")
 		return
 	}
 
-	fmt.Println("Active tasks:")
-	for name, startTime := range cliTasks {
-		duration := time.Since(startTime)
-		fmt.Printf("- %s (running for %v)\n", name, duration.Round(time.Second))
+	fmt.Println("Completed tasks:")
+	for _, task := range tasks {
+		fmt.Printf("- ID: %d, Name: %s, Duration: %v\n", task.ID, task.Name, task.Duration)
 	}
-}
-
-func homeHandler(c *fiber.Ctx) error {
-	mu.Lock()
-	defer mu.Unlock()
-
-	return c.Render("index", fiber.Map{"Tasks": tasks})
 }
 
 func startTaskHandler(c *fiber.Ctx) error {
 	taskName := c.FormValue("task")
-	durationStr := c.FormValue("duration")
 
 	if taskName == "" {
 		return c.Status(400).SendString("Task name is required.")
 	}
 
-	duration, err := time.ParseDuration(durationStr + "s")
+	id, err := storage.CreateTask(db, taskName)
 	if err != nil {
-		return c.Status(400).SendString("Invalid duration format.")
+		return c.Status(500).SendString("Error starting task: " + err.Error())
 	}
 
-	mu.Lock()
-	tasks = append(tasks, Task{Name: taskName, Duration: duration})
-	mu.Unlock()
-
-	// Start a goroutine to handle task completion
-	go handleTaskCompletion(taskName, duration)
-	return c.SendString("Task started")
-}
-
-func handleTaskCompletion(taskName string, duration time.Duration) {
-	time.Sleep(duration)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	for i, task := range tasks {
-		if task.Name == taskName {
-			// Remove the task from the slice
-			tasks = append(tasks[:i], tasks[i+1:]...)
-			// Add the task to completedTasks
-			completedTasks = append(completedTasks, CompletedTask{
-				Name:     taskName,
-				Duration: duration.Seconds(),
-			})
-			// Print the completed task
-			fmt.Printf("Task completed: %s (Duration: %v)\n", taskName, duration)
-			break
-		}
-	}
-}
-
-func completedTasksHandler(c *fiber.Ctx) error {
-	mu.Lock()
-	defer mu.Unlock()
-	return c.JSON(completedTasks)
+	return c.JSON(fiber.Map{"id": id, "message": "Task started"})
 }
 
 func stopTaskHandler(c *fiber.Ctx) error {
-	taskName := c.FormValue("task")
-	durationStr := c.FormValue("duration")
+	taskID := c.FormValue("id")
 
-	if taskName == "" {
-		return c.Status(400).SendString("Task name is required.")
+	if taskID == "" {
+		return c.Status(400).SendString("Task ID is required.")
 	}
 
-	duration, err := time.ParseDuration(durationStr + "s")
+	id, err := strconv.ParseInt(taskID, 10, 64)
 	if err != nil {
-		return c.Status(400).SendString("Invalid duration format.")
+		return c.Status(400).SendString("Invalid task ID.")
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	err = storage.StopTask(db, id)
+	if err != nil {
+		return c.Status(500).SendString("Error stopping task: " + err.Error())
+	}
 
+	return c.SendString("Task stopped")
+}
+
+func completedTasksHandler(c *fiber.Ctx) error {
+	tasks, err := storage.GetCompletedTasks(db)
+	if err != nil {
+		return c.Status(500).SendString("Error retrieving completed tasks: " + err.Error())
+	}
+
+	completedTasks := make([]CompletedTask, len(tasks))
 	for i, task := range tasks {
-		if task.Name == taskName {
-			tasks[i].Duration = duration
-			completedTasks = append(completedTasks, CompletedTask{Name: taskName, Duration: duration.Seconds()})
-			tasks = append(tasks[:i], tasks[i+1:]...)
-			return c.SendString("Done")
+		completedTasks[i] = CompletedTask{
+			ID:        task.ID,
+			Name:      task.Name,
+			StartTime: task.StartTime,
+			EndTime:   task.EndTime,
+			Duration:  task.Duration.Seconds(),
 		}
 	}
 
-	return c.SendString("Done")
+	return c.JSON(completedTasks)
 }
+
+/*
