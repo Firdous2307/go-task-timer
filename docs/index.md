@@ -9,7 +9,7 @@
 6. [Technologies Used](technologies.md)
 7. [Testing](testing.md)
 8. [Continuous Integration and Continious Deployment](ci-cd.md)
-9. [Contributing](contributing.md)
+9. [Contributing](contribute.md)
 10. [Storage](storage.md)
 11. [Server-Side Rendering](server-side-rendering.md)
 
