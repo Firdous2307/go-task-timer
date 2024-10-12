@@ -11,6 +11,7 @@
 8. [Continuous Integration and Continious Deployment](ci-cd.md)
 9. [Contributing](contributing.md)
 10. [Storage](storage.md)
+11. [Server-Side Rendering](server-side-rendering.md)
 
 
 ## Introduction

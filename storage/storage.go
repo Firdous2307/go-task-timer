@@ -1,4 +1,3 @@
-/*
 package storage
 
 import (
@@ -95,4 +94,23 @@ func GetCompletedTasks(db *sql.DB) ([]Task, error) {
 	}
 	return tasks, nil
 }
-/*
+
+func GetActiveTasks(db *sql.DB) ([]Task, error) {
+	rows, err := db.Query("SELECT id, name, start_time FROM tasks WHERE end_time IS NULL")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var t Task
+		err := rows.Scan(&t.ID, &t.Name, &t.StartTime)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+
+	return tasks, nil
+}

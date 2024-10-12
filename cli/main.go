@@ -1,4 +1,3 @@
-/*
 package main
 
 import (
@@ -7,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +13,7 @@ import (
 	"github.com/Firdous2307/go-task-timer/storage"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/template/html/v2"
 )
 
 type Task struct {
@@ -47,26 +46,59 @@ func main() {
 	defer db.Close()
 
 	app := fiber.New(fiber.Config{
-		Views: nil,
+		Views: html.New("./web/templates", ".html"),
 	})
 
 	app.Use(logger.New())
-	app.Static("/", "../task-tracker-frontend/build")
+	app.Static("/static", "./web/static")
 
-	app.Post("/api/start", startTaskHandler)
-	app.Post("/api/stop", stopTaskHandler)
-	app.Get("/api/completed-tasks", completedTasksHandler)
+	app.Get("/", indexHandler)
+	app.Post("/start", startTaskHandler)
+	app.Post("/stop", stopTaskHandler)
 
-	app.Get("/*", func(c *fiber.Ctx) error {
-		return c.SendFile("../task-tracker-frontend/build/index.html")
+	log.Fatal(app.Listen(":8080"))
+}
+
+func indexHandler(c *fiber.Ctx) error {
+	tasks, err := storage.GetCompletedTasks(db)
+	if err != nil {
+		return c.Status(500).SendString("Error retrieving completed tasks")
+	}
+
+	return c.Render("index", fiber.Map{
+		"Tasks": tasks,
 	})
+}
 
-	// Start the Fiber app in a separate goroutine
-	go func() {
-		log.Fatal(app.Listen(":8080"))
-	}()
+func startTaskHandler(c *fiber.Ctx) error {
+	taskName := c.FormValue("task")
 
-	cliLoop() // Start the CLI loop
+	if taskName == "" {
+		return c.Redirect("/")
+	}
+
+	_, err := storage.CreateTask(db, taskName)
+	if err != nil {
+		return c.Status(500).SendString("Error starting task: " + err.Error())
+	}
+
+	return c.Redirect("/")
+}
+
+func stopTaskHandler(c *fiber.Ctx) error {
+	tasks, err := storage.GetActiveTasks(db)
+	if err != nil {
+		return c.Status(500).SendString("Error retrieving active tasks")
+	}
+
+	if len(tasks) > 0 {
+		err = storage.StopTask(db, tasks[0].ID)
+		if err != nil {
+			return c.Status(500).SendString("Error stopping task: " + err.Error())
+		}
+	}
+
+	return c.Redirect("/")
 }
 
 func cliLoop() {
@@ -163,59 +195,3 @@ func viewCompletedTasks() {
 		fmt.Printf("- ID: %d, Name: %s, Duration: %v\n", task.ID, task.Name, task.Duration)
 	}
 }
-
-func startTaskHandler(c *fiber.Ctx) error {
-	taskName := c.FormValue("task")
-
-	if taskName == "" {
-		return c.Status(400).SendString("Task name is required.")
-	}
-
-	id, err := storage.CreateTask(db, taskName)
-	if err != nil {
-		return c.Status(500).SendString("Error starting task: " + err.Error())
-	}
-
-	return c.JSON(fiber.Map{"id": id, "message": "Task started"})
-}
-
-func stopTaskHandler(c *fiber.Ctx) error {
-	taskID := c.FormValue("id")
-
-	if taskID == "" {
-		return c.Status(400).SendString("Task ID is required.")
-	}
-
-	id, err := strconv.ParseInt(taskID, 10, 64)
-	if err != nil {
-		return c.Status(400).SendString("Invalid task ID.")
-	}
-
-	err = storage.StopTask(db, id)
-	if err != nil {
-		return c.Status(500).SendString("Error stopping task: " + err.Error())
-	}
-
-	return c.SendString("Task stopped")
-}
-
-func completedTasksHandler(c *fiber.Ctx) error {
-	tasks, err := storage.GetCompletedTasks(db)
-	if err != nil {
-		return c.Status(500).SendString("Error retrieving completed tasks: " + err.Error())
-	}
-
-	completedTasks := make([]CompletedTask, len(tasks))
-	for i, task := range tasks {
-		completedTasks[i] = CompletedTask{
-			ID:        task.ID,
-			Name:      task.Name,
-			StartTime: task.StartTime,
-			EndTime:   task.EndTime,
-			Duration:  task.Duration.Seconds(),
-		}
-	}
-
-	return c.JSON(completedTasks)
-}
-*/
