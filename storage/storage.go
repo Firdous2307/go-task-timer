@@ -95,6 +95,7 @@ func GetCompletedTasks(db *sql.DB) ([]Task, error) {
 	return tasks, nil
 }
 
+
 func GetActiveTasks(db *sql.DB) ([]Task, error) {
 	rows, err := db.Query("SELECT id, name, start_time FROM tasks WHERE end_time IS NULL")
 	if err != nil {
