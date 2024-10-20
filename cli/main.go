@@ -46,31 +46,46 @@ func main() {
 	defer db.Close()
 
 	app := fiber.New(fiber.Config{
-		Views: html.New("../web/templates", ".html"),
+		Views: html.New("../web/templates", ".html"), // Adjust path as needed
 	})
 
 	app.Use(logger.New())
-	app.Static("/static", "../web/static")
+	app.Static("/static", "../web/static") // Adjust path as needed
 
 	app.Get("/", indexHandler)
 	app.Post("/start", startTaskHandler)
 	app.Post("/stop", stopTaskHandler)
+	app.Get("/active-tasks", activeTasksHandler) // New route for active tasks
+
+	// Start CLI loop in a separate goroutine
+	go cliLoop()
 
 	log.Fatal(app.Listen(":8080"))
 }
-
 func indexHandler(c *fiber.Ctx) error {
-	tasks, err := storage.GetCompletedTasks(db)
+	mu.Lock()
+	defer mu.Unlock()
+
+	completedTasks, err := storage.GetCompletedTasks(db)
 	if err != nil {
 		return c.Status(500).SendString("Error retrieving completed tasks")
 	}
 
+	activeTasks, err := storage.GetActiveTasks(db) // Retrieve active tasks
+	if err != nil {
+		return c.Status(500).SendString("Error retrieving active tasks")
+	}
+
 	return c.Render("index", fiber.Map{
-		"Tasks": tasks,
+		"Tasks":       completedTasks,
+		"ActiveTasks": activeTasks, // Pass active tasks to the template
 	})
 }
 
 func startTaskHandler(c *fiber.Ctx) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	taskName := c.FormValue("task")
 
 	if taskName == "" {
@@ -86,6 +101,9 @@ func startTaskHandler(c *fiber.Ctx) error {
 }
 
 func stopTaskHandler(c *fiber.Ctx) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	tasks, err := storage.GetActiveTasks(db)
 	if err != nil {
 		return c.Status(500).SendString("Error retrieving active tasks")
@@ -101,6 +119,20 @@ func stopTaskHandler(c *fiber.Ctx) error {
 	return c.Redirect("/")
 }
 
+func activeTasksHandler(c *fiber.Ctx) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	tasks, err := storage.GetActiveTasks(db)
+	if err != nil {
+		return c.Status(500).SendString("Error retrieving active tasks")
+	}
+
+	return c.Render("active-tasks", fiber.Map{
+		"Tasks": tasks,
+	})
+}
+
 func cliLoop() {
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -108,7 +140,8 @@ func cliLoop() {
 		fmt.Println("\n1. Start a task")
 		fmt.Println("2. Stop a task")
 		fmt.Println("3. View completed tasks")
-		fmt.Println("4. Exit")
+		fmt.Println("4. View active tasks") // New option to view active tasks
+		fmt.Println("5. Exit")
 		fmt.Print("Choose an option: ")
 
 		if !scanner.Scan() {
@@ -126,6 +159,8 @@ func cliLoop() {
 		case "3":
 			viewCompletedTasks()
 		case "4":
+			viewActiveTasks() // Call to the new function
+		case "5":
 			fmt.Println("Goodbye!")
 			return
 		default:
@@ -144,7 +179,10 @@ func startTask() {
 			return
 		}
 
+		mu.Lock()
 		id, err := storage.CreateTask(db, taskName)
+		mu.Unlock()
+
 		if err != nil {
 			fmt.Println("Error starting task:", err)
 			return
@@ -160,14 +198,20 @@ func stopTask() {
 	var taskID int64
 	fmt.Scanln(&taskID)
 
+	mu.Lock()
 	err := storage.StopTask(db, taskID)
+	mu.Unlock()
+
 	if err != nil {
 		fmt.Println("Error stopping task:", err)
 		return
 	}
 
 	// Retrieve the specific task that was stopped
+	mu.Lock()
 	task, err := storage.GetTask(db, taskID)
+	mu.Unlock()
+
 	if err != nil {
 		fmt.Println("Error retrieving task details:", err)
 		return
@@ -179,7 +223,10 @@ func stopTask() {
 }
 
 func viewCompletedTasks() {
+	mu.Lock()
 	tasks, err := storage.GetCompletedTasks(db)
+	mu.Unlock()
+
 	if err != nil {
 		fmt.Println("Error retrieving tasks:", err)
 		return
@@ -193,5 +240,26 @@ func viewCompletedTasks() {
 	fmt.Println("Completed tasks:")
 	for _, task := range tasks {
 		fmt.Printf("- ID: %d, Name: %s, Duration: %v\n", task.ID, task.Name, task.Duration)
+	}
+}
+
+func viewActiveTasks() {
+	mu.Lock()
+	tasks, err := storage.GetActiveTasks(db)
+	mu.Unlock()
+
+	if err != nil {
+		fmt.Println("Error retrieving active tasks:", err)
+		return
+	}
+
+	if len(tasks) == 0 {
+		fmt.Println("No active tasks.")
+		return
+	}
+
+	fmt.Println("Active tasks:")
+	for _, task := range tasks {
+		fmt.Printf("- ID: %d, Name: %s, Start Time: %s\n", task.ID, task.Name, task.StartTime)
 	}
 }
