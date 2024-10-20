@@ -46,11 +46,11 @@ func main() {
 	defer db.Close()
 
 	app := fiber.New(fiber.Config{
-		Views: html.New("./web/templates", ".html"),
+		Views: html.New("../web/templates", ".html"),
 	})
 
 	app.Use(logger.New())
-	app.Static("/static", "./web/static")
+	app.Static("/static", "../web/static")
 
 	app.Get("/", indexHandler)
 	app.Post("/start", startTaskHandler)
