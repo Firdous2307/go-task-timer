@@ -24,5 +24,13 @@
         {{end}}
     </ul>
 
+    <h2>Active Tasks</h2>
+    <ul id="activeTaskList">
+        {{range .ActiveTasks}}
+        <li>ID: {{.ID}}, Name: {{.Name}}, Start Time: {{.StartTime}}</li>
+        {{else}}
+        <li>No active tasks.</li>
+        {{end}}
+    </ul>
 </body>
 </html>
