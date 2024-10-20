@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite" // Updated to use modernc.org/sqlite driver
 )
 
 type Task struct {
@@ -17,7 +17,7 @@ type Task struct {
 }
 
 func InitDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "./tasks.db")
+	db, err := sql.Open("sqlite", "./tasks.db") // Change to "sqlite"
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,6 @@ func GetCompletedTasks(db *sql.DB) ([]Task, error) {
 	}
 	return tasks, nil
 }
-
 
 func GetActiveTasks(db *sql.DB) ([]Task, error) {
 	rows, err := db.Query("SELECT id, name, start_time FROM tasks WHERE end_time IS NULL")
