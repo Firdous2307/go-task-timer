@@ -23,6 +23,11 @@
         <li>{{.Name}} (Duration: {{.Duration}})</li>
         {{end}}
     </ul>
+    {{if .Tasks}}
+    <form action="/clear-completed" method="POST">
+        <button type="submit" class="clear-btn">Clear Completed Tasks</button>
+    </form>
+    {{end}}
 
     <h2>Active Tasks</h2>
     <ul id="activeTaskList">

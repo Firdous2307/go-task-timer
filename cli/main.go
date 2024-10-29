@@ -46,16 +46,17 @@ func main() {
 	defer db.Close()
 
 	app := fiber.New(fiber.Config{
-		Views: html.New("../web/templates", ".html"), // Adjust path as needed
+		Views: html.New("./web/templates", ".html"), // Adjust path as needed
 	})
 
 	app.Use(logger.New())
-	app.Static("/static", "../web/static") // Adjust path as needed
+	app.Static("/static", "./web/static") // Adjust path as needed
 
 	app.Get("/", indexHandler)
 	app.Post("/start", startTaskHandler)
 	app.Post("/stop", stopTaskHandler)
 	app.Get("/active-tasks", activeTasksHandler) // New route for active tasks
+	app.Post("/clear-completed", clearCompletedTasksHandler)
 
 	// Start CLI loop in a separate goroutine
 	go cliLoop()
@@ -131,6 +132,18 @@ func activeTasksHandler(c *fiber.Ctx) error {
 	return c.Render("active-tasks", fiber.Map{
 		"Tasks": tasks,
 	})
+}
+
+func clearCompletedTasksHandler(c *fiber.Ctx) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	err := storage.ClearCompletedTasks(db)
+	if err != nil {
+		return c.Status(500).SendString("Error clearing completed tasks: " + err.Error())
+	}
+
+	return c.Redirect("/")
 }
 
 func cliLoop() {

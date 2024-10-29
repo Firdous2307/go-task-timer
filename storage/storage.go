@@ -114,3 +114,9 @@ func GetActiveTasks(db *sql.DB) ([]Task, error) {
 
 	return tasks, nil
 }
+
+func ClearCompletedTasks(db *sql.DB) error {
+	query := `DELETE FROM tasks WHERE end_time IS NOT NULL`
+	_, err := db.Exec(query)
+	return err
+}
