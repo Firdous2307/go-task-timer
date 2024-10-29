@@ -4,7 +4,7 @@ tasks:
       go mod tidy
       go get -u github.com/gofiber/fiber/v2
       go get -u html/template
-      go run main.go
+      go run cli/main.go
 vscode:
   extensions:
     - golang.go

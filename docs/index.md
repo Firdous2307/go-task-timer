@@ -12,6 +12,7 @@
 9. [Contributing](contribute.md)
 10. [Storage](storage.md)
 11. [Server-Side Rendering](server-side-rendering.md)
+12. [Containerization](containerization.md)
 
 
 ## Introduction
